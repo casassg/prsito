@@ -135,3 +135,28 @@ fn a_stale_fetch_landing_after_a_close_keeps_the_pr_closed() {
     s.land(0, Ok(reopened));
     assert_eq!(fleet(&s), "OPEN", "a newer copy from GitHub wins");
 }
+
+#[test]
+fn the_update_banner_shows_only_with_a_release_and_later_hides_it() {
+    let mut rt = runtime(github::MINE);
+    assert!(rt.find("update").is_none(), "no release, no banner");
+    rt.state.update = Some(crate::update::Release { version: "9.9.9".into(), dmg: String::new() });
+    settle(&mut rt);
+    assert!(rt.find("update").is_some());
+    click(&mut rt, "update/dismiss");
+    assert!(rt.state.update.is_none());
+    assert!(rt.find("update").is_none());
+}
+
+#[test]
+fn update_installs_once_and_waits_while_running() {
+    let mut rt = runtime(github::MINE);
+    rt.state.install_update();
+    assert!(!rt.state.updating, "nothing to install without a release");
+    rt.state.update = Some(crate::update::Release { version: "9.9.9".into(), dmg: String::new() });
+    settle(&mut rt);
+    click(&mut rt, "update/install");
+    assert!(rt.state.updating);
+    click(&mut rt, "update/dismiss");
+    assert!(rt.state.update.is_some(), "Later is disabled mid-install");
+}

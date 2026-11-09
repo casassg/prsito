@@ -68,3 +68,16 @@ fn saved_state_and_cache_round_trip_through_sqlite() {
     assert_eq!(store::load(&path).settings.days, 9, "and now lives in the database");
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+#[test]
+fn only_a_higher_release_counts_as_newer() {
+    use crate::update::newer;
+    assert!(newer("0.4.0", "0.3.9"));
+    assert!(newer("v0.10.0", "0.9.0"), "numeric, not lexical, and a v prefix is fine");
+    assert!(newer("1.0.0", "0.99"));
+    assert!(!newer("0.3.0", "0.3.0"));
+    assert!(!newer("0.2.0", "0.3.0"));
+    assert!(!newer("", "0.3.0"));
+    assert!(!newer("nightly", "0.3.0"));
+    assert!(!newer("0.4.0", ""));
+}

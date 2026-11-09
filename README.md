@@ -16,15 +16,16 @@ Needs an Apple silicon Mac and [`gh`](https://cli.github.com) logged in (`gh aut
 curl -fsSL https://raw.githubusercontent.com/casassg/prsito/main/install.sh | sh
 ```
 
-Run it again to update. Or grab `prsito.dmg` from the [latest release](https://github.com/casassg/prsito/releases/latest) and drag the app to Applications; the app isn't notarized, so a browser download needs System Settings → Privacy & Security → Open Anyway on first launch (the curl install skips that).
+The app updates itself: it checks for a new release on launch and every 6 hours, and a banner offers **Update and relaunch**. Running the install script again also updates. Or grab `prsito.dmg` from the [latest release](https://github.com/casassg/prsito/releases/latest) and drag the app to Applications; the app isn't notarized, so a browser download needs System Settings → Privacy & Security → Open Anyway on first launch (the curl install skips that).
 
 ## Develop
 
 ```sh
 . bin/activate-hermit
 cargo run --release
-scripts/release.sh                           # target/prsito.dmg, and installs /Applications/prsito.app
+scripts/release.sh                           # target/prsito.dmg, and installs /Applications/prsito.app (no update checks)
+scripts/release.sh 1.2.3                     # stamps a version, so the build checks for updates (CI does this)
 cargo test                                   # add -- --ignored to hit GitHub for real
-./target/release/prsito --snap board.png --scene fixture   # also: reviews, settings
+./target/release/prsito --snap board.png --scene fixture   # also: reviews, settings, update
 ./target/release/prsito --scene fixture --script scripts/drag.json --snap after.png --at mark:end
 ```

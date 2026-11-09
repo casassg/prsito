@@ -34,7 +34,11 @@ pub struct Fetched {
 pub enum Note {
     Detail { url: String, result: Result<github::Info, String> },
     Acted { url: String, act: Act, result: Result<(), String> },
+    Update(Option<update::Release>),
+    UpdateFailed(String),
 }
+
+const UPDATE_EVERY: f64 = 6.0 * 3600.0;
 
 /// The open detail card; `info` is `None` while it loads.
 #[derive(Clone, Debug, PartialEq)]
@@ -106,6 +110,10 @@ pub struct App {
     pub cli: bool,
     /// The window is coming back from the menu bar and may still carry a stale full screen.
     pub unfull: bool,
+    /// A newer release to offer in the banner; dismissing it waits for the next check.
+    pub update: Option<update::Release>,
+    pub updating: bool,
+    pub next_check: f64,
 }
 
 impl App {
@@ -152,7 +160,37 @@ impl App {
             watch: None,
             cli: false,
             unfull: false,
+            update: None,
+            updating: false,
+            next_check: 0.0,
         }
+    }
+
+    /// Downloads and installs the offered release, then relaunches. Headless it only marks the
+    /// install as running.
+    pub fn install_update(&mut self) {
+        let Some(r) = self.update.clone().filter(|_| !self.updating) else { return };
+        self.updating = true;
+        if !self.live {
+            return;
+        }
+        let (out, wake) = (self.notes_out.clone(), self.waker.clone());
+        std::thread::spawn(move || {
+            if out.send(Note::UpdateFailed(update::install(&r))).is_ok() && let Some(w) = &wake {
+                w();
+            }
+        });
+    }
+
+    fn check_update(&self) {
+        let Some(current) = update::VERSION else { return };
+        let (out, wake) = (self.notes_out.clone(), self.waker.clone());
+        std::thread::spawn(move || {
+            let Ok(found) = update::check(current) else { return };
+            if out.send(Note::Update(found)).is_ok() && let Some(w) = &wake {
+                w();
+            }
+        });
     }
 
     fn pr(&self, url: &str) -> Option<&Pr> {
@@ -522,8 +560,20 @@ fn poll(s: &mut App, t: f64, tx: &mut Tx) -> bool {
                 }
             }
             Note::Acted { url, act, result } => s.finish(&url, act, result),
+            Note::Update(found) => s.update = found,
+            Note::UpdateFailed(e) => {
+                s.updating = false;
+                s.error[s.board()] = Some(e);
+            }
         }
         changed = true;
+    }
+    if s.live && update::VERSION.is_some() {
+        if t >= s.next_check {
+            s.check_update();
+            s.next_check = t + UPDATE_EVERY;
+        }
+        tx.wake_after(Duration::from_secs_f64((s.next_check - t).max(1.0)));
     }
     if let Some((_, at)) = &s.armed {
         match CONFIRM.checked_sub(at.elapsed()) {
@@ -644,6 +694,10 @@ fn main() {
             ("note", |s| {
                 fixture(s, github::REVIEWS);
                 s.ask_changes("https://github.com/acme/fleet/pull/5501");
+            }),
+            ("update", |s| {
+                fixture(s, github::MINE);
+                s.update = Some(update::Release { version: "0.4.0".into(), dmg: String::new() });
             }),
             ("black", |s| {
                 fixture(s, github::MINE);

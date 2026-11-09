@@ -7,6 +7,8 @@ cd "$(dirname "$0")/.."
 . bin/activate-hermit >/dev/null 2>&1 || true
 
 version="${1:-$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)}"
+# Only release builds (an explicit version) learn their version and check for updates.
+if [ -n "${1:-}" ]; then export PRSITO_VERSION="$1"; fi
 cargo build --release
 
 out=target/dmg

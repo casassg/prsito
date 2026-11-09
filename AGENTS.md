@@ -13,7 +13,7 @@ A macOS kanban of the user's GitHub PRs, built on Rune (`github.com/anomalyco/ru
 
 ## Headless checks (Rune tooling, no window)
 
-- `./target/release/prsito --snap out.png --scene NAME --scale 1`. Scenes (`main.rs`): `fixture`, `reviews`, `settings`, `detail`, `menu`, `armed`, `black`, `white`, `accent`. They load `fixture()` sample PRs; headless runs never fetch or touch the database.
+- `./target/release/prsito --snap out.png --scene NAME --scale 1`. Scenes (`main.rs`): `fixture`, `reviews`, `settings`, `detail`, `menu`, `armed`, `update`, `black`, `white`, `accent`. They load `fixture()` sample PRs; headless runs never fetch or touch the database.
 - `--script scripts/drag.json --snap after.png --at mark:end` replays input; `--tree tree.json --at T` dumps the element tree.
 - UI tests drive `rune::Runtime` (`pointer_down/move/up`, `frame`, `find(key)`, `presented(key)`). Element keys are paths split on `/`, so card keys swap the repo's `/` for `-` (`card-casassg-psy-77`); tests rely on keys like `lane-{id}/head/grip` and `newlane`.
 
