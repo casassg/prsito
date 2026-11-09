@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use rune::tok::motion;
 use rune::{Drag, Phase, Tx};
 
 use crate::github::{self, Act};
@@ -164,6 +165,10 @@ pub(crate) fn drag(s: &mut App, what: Dragging, d: &mut Drag, tx: &mut Tx) {
             if s.drag.as_ref().is_some_and(|ds| ds.act != act) {
                 tx.instant();
             }
+            if let Dragging::Card(url) = &what && s.selected.contains(url) && s.selected.len() > 1 {
+                tx.animated();
+                tx.motion(motion::SNAPPY);
+            }
             if let Some(ds) = &mut s.drag {
                 ds.dx = d.dx;
                 ds.dy = d.dy;
@@ -191,6 +196,9 @@ pub(crate) fn drag(s: &mut App, what: Dragging, d: &mut Drag, tx: &mut Tx) {
                 }
                 return;
             };
+            if let Dragging::Card(url) = &ds.what && s.selected.contains(url) && s.selected.len() > 1 {
+                tx.animated();
+            }
             if d.cancelled() {
                 return;
             }

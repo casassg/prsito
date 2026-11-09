@@ -259,3 +259,30 @@ fn a_cancelled_multi_drag_changes_nothing() {
     }
     assert_eq!(rt.state.saved, before);
 }
+
+#[test]
+fn carried_cards_fly_from_their_places_into_the_stack() {
+    let mut rt = runtime(github::MINE);
+    cmd_click(&mut rt, "card-acme-fleet-88");
+    cmd_click(&mut rt, "card-casassg-psy-77");
+    settle(&mut rt);
+    let [px, py, ..] = rt.presented("card-casassg-psy-77").unwrap().0;
+    let (x, y) = rt.find("card-acme-fleet-88").unwrap();
+    rt.pointer_down(x, y);
+    rt.pointer_move(x + 10.0, y + 10.0);
+    rt.frame(1.0 / 60.0);
+    let [sx, sy, ..] = rt.presented("behind-0").unwrap().0;
+    assert!((sx - px).hypot(sy - py) < 40.0, "starts where psy sat: {sx},{sy} vs {px},{py}");
+    for i in 0..40 {
+        rt.pointer_move(x + 10.0 + i as f32, y + 10.0);
+        rt.frame(1.0 / 60.0);
+    }
+    for _ in 0..30 {
+        rt.frame(1.0 / 60.0);
+    }
+    let [gx, gy, ..] = rt.presented("ghost").unwrap().0;
+    let [bx, by, ..] = rt.presented("behind-0").unwrap().0;
+    assert!((bx - gx - 6.0).hypot(by - gy - 6.0) < 2.0, "ends under the ghost: {bx},{by} vs {gx},{gy}");
+    let [ox, oy, ..] = rt.state.drag.as_ref().unwrap().origin;
+    assert!((gx - ox - 49.0).abs() < 0.1 && (gy - oy - 10.0).abs() < 0.1, "the ghost tracks the pointer");
+}

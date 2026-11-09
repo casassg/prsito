@@ -18,7 +18,12 @@ pub(super) fn card(s: &App, pr: &Pr, p: Pal) -> El {
     let selected = s.selected.contains(&pr.url);
     let rect_key = format!("card:{}", pr.url);
     let menu_url = pr.url.clone();
-    let body = card_body(s, pr, p).key(card_key(pr));
+    let grabbed = s.drag.as_ref().is_some_and(|d| d.what == Dragging::Card(pr.url.clone()));
+    let body = card_body(s, pr, p);
+    let mut body = if lifted && !grabbed { body.key(format!("{}-held", card_key(pr))) } else { body.key(card_key(pr)) };
+    if !lifted {
+        body = body.matched(format!("fly:{}", pr.url));
+    }
     if selected {
         body.border(1.5, p.text.alpha(0.85))
     } else {
@@ -102,6 +107,8 @@ pub(super) fn card_body(s: &App, pr: &Pr, p: Pal) -> El {
         .child(foot)
 }
 
+/// What follows the pointer. The other carried cards fly in from their places to stack under
+/// it and trail it on a spring; on the drop they fly to where they land.
 pub(super) fn ghost(s: &App, d: &DragState, p: Pal) -> El {
     let [x, y, w, _] = d.origin;
     let body = match &d.what {
@@ -119,21 +126,25 @@ pub(super) fn ghost(s: &App, d: &DragState, p: Pal) -> El {
         Dragging::Card(url) if s.selected.contains(url) => s.selected.len(),
         _ => 1,
     };
-    let mut ghost = el().key("ghost").absolute(x + d.dx, y + d.dy).w(w);
-    if let Dragging::Card(url) = &d.what && n > 1 {
-        let behind = s.prs[s.board()].iter().filter(|pr| s.selected.contains(&pr.url) && &pr.url != url).take(2);
-        for (i, pr) in behind.enumerate().collect::<Vec<_>>().into_iter().rev() {
-            let k = (i + 1) as f32;
-            ghost = ghost.child(card_body(s, pr, p).fill(p.card_hover).absolute(6.0 * k, 6.0 * k).w(w).rotate(0.02 * k).opacity(0.85));
-        }
-    }
-    let ghost = ghost.child(body.rotate(-0.025).shadow(14.0, 32.0, Color::BLACK.alpha(0.55)).opacity(0.96));
+    let (gx, gy) = (x + d.dx, y + d.dy);
+    let mut ghost = el().key("ghost").absolute(gx, gy).w(w).instant_changes()
+        .child(body.w(w).rotate(-0.025).shadow(14.0, 32.0, Color::BLACK.alpha(0.55)).opacity(0.96));
     if n > 1 {
-        ghost.child(row().key("count").absolute(w - 12.0, -10.0).size(22.0, 22.0).center().radius(11.0).fill(p.text)
-            .child(text(n.to_string()).font(SMALL).color(p.ink)))
-    } else {
-        ghost
+        ghost = ghost.child(row().key("count").absolute(w - 12.0, -10.0).size(22.0, 22.0).center().radius(11.0).fill(p.text)
+            .child(text(n.to_string()).font(SMALL).color(p.ink)));
     }
+    let Dragging::Card(url) = &d.what else { return ghost };
+    if n == 1 {
+        return ghost;
+    }
+    let mut carry = el().key("carry").absolute(0.0, 0.0);
+    let behind: Vec<&Pr> = s.prs[s.board()].iter().filter(|pr| s.selected.contains(&pr.url) && &pr.url != url).collect();
+    for (i, pr) in behind.into_iter().enumerate().rev() {
+        let k = (i + 1).min(2) as f32;
+        carry = carry.child(card_body(s, pr, p).key(format!("behind-{i}")).matched(format!("fly:{}", pr.url))
+            .fill(p.card_hover).absolute(gx + 6.0 * k, gy + 6.0 * k).w(w).rotate(0.02 * k).opacity(0.85));
+    }
+    carry.child(ghost)
 }
 
 /// The drop zones while a card is carried: faded slabs over the card's own lane, snapped to the
