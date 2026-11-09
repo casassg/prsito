@@ -8,6 +8,18 @@ My GitHub PRs as a small kanban board, built with [Rune](https://github.com/anom
 - Click a card to open the PR. ⌘R refreshes. Settings (merged window, refresh interval, closed toggle, extra search terms) save as you type and the board follows at once.
 - Auth comes from `gh auth token`. Settings, lanes and the last fetched PRs live in SQLite at `~/.config/prsito/prsito.db`, so a launch shows the board at once and refreshes behind it.
 
+## Install
+
+Needs an Apple silicon Mac and [`gh`](https://cli.github.com) logged in (`gh auth login`).
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/casassg/prsito/main/install.sh | sh
+```
+
+Run it again to update. Or grab `prsito.dmg` from the [latest release](https://github.com/casassg/prsito/releases/latest) and drag the app to Applications; the app isn't notarized, so a browser download needs System Settings → Privacy & Security → Open Anyway on first launch (the curl install skips that).
+
+## Develop
+
 ```sh
 . bin/activate-hermit
 cargo run --release
