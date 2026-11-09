@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use rune::{Drag, Phase, Tx};
 
 use crate::github::Act;
@@ -71,6 +73,44 @@ fn target_at(s: &App, y: f32, card: bool) -> Option<Target> {
     None
 }
 
+/// Whether the card at `url` is being carried: the grabbed one, or any other selected card
+/// when the grabbed one is selected.
+pub(crate) fn carries(s: &App, url: &str) -> bool {
+    matches!(&s.drag, Some(DragState { what: Dragging::Card(g), .. }) if g == url || s.selected.contains(g) && s.selected.contains(url))
+}
+
+/// Rubber-band selection on the board's empty space (cards take their own presses). Shift
+/// adds to the selection held at the press; a press that never travels clears it.
+pub(crate) fn marquee(s: &mut App, d: &mut Drag, tx: &mut Tx) {
+    match d.phase {
+        Phase::Down => {
+            s.marquee_base = if tx.mods().shift { s.selected.clone() } else { HashSet::new() };
+        }
+        Phase::Move => {
+            if s.marquee.is_none() && d.dx.hypot(d.dy) < SLOP {
+                return;
+            }
+            let Some([bx, by, ..]) = s.rects.get("board").copied() else { return };
+            let (x, y) = (bx + d.start_x, by + d.start_y);
+            let m = [x, y, x + d.dx, y + d.dy];
+            let (l, t, r, b) = (m[0].min(m[2]), m[1].min(m[3]), m[0].max(m[2]), m[1].max(m[3]));
+            let mut sel = s.marquee_base.clone();
+            for (k, c) in &s.rects {
+                if let Some(url) = k.strip_prefix("card:") && c[0] < r && c[0] + c[2] > l && c[1] < b && c[1] + c[3] > t {
+                    sel.insert(url.to_string());
+                }
+            }
+            s.selected = sel;
+            s.marquee = Some(m);
+        }
+        Phase::Up => {
+            if s.marquee.take().is_none() && !d.cancelled() && s.marquee_base.is_empty() {
+                s.selected.clear();
+            }
+        }
+    }
+}
+
 /// One drag handler for cards and lane headers: past a few points of travel the element lifts
 /// into a ghost that follows the pointer, and the lane under the pointer is the drop target.
 /// A press that never travels is a click (cards open, lane titles rename on double click).
@@ -91,6 +131,9 @@ pub(crate) fn drag(s: &mut App, what: Dragging, d: &mut Drag, tx: &mut Tx) {
                     Dragging::Card(_) => origin,
                     Dragging::Lane(_) => [origin[0], origin[1], origin[2], 46.0],
                 };
+                if let Dragging::Card(url) = &what && !s.selected.contains(url) {
+                    s.selected.clear();
+                }
                 s.rects.retain(|k, _| !k.starts_with("act:"));
                 s.drag = Some(DragState { what: what.clone(), origin, dx: 0.0, dy: 0.0, over: None, act: None });
                 s.renaming = None;
@@ -125,7 +168,15 @@ pub(crate) fn drag(s: &mut App, what: Dragging, d: &mut Drag, tx: &mut Tx) {
                     return;
                 }
                 match &what {
-                    Dragging::Card(url) => s.open_detail(url.clone()),
+                    Dragging::Card(url) if tx.mods().cmd => {
+                        if !s.selected.remove(url) {
+                            s.selected.insert(url.clone());
+                        }
+                    }
+                    Dragging::Card(url) => {
+                        s.selected.clear();
+                        s.open_detail(url.clone());
+                    }
                     Dragging::Lane(id) if d.clicks >= 2 => s.start_rename(*id),
                     Dragging::Lane(_) => {}
                 }
@@ -135,11 +186,35 @@ pub(crate) fn drag(s: &mut App, what: Dragging, d: &mut Drag, tx: &mut Tx) {
                 return;
             }
             s.rects.retain(|k, _| !k.starts_with("act:"));
+            let carried = |s: &App, url: &String| {
+                let mut all = vec![url.clone()];
+                if s.selected.contains(url) {
+                    all.extend(s.prs[s.board()].iter().filter(|pr| pr.url != *url && s.selected.contains(&pr.url)).map(|pr| pr.url.clone()));
+                }
+                all
+            };
             match (&ds.what, ds.over) {
-                (Dragging::Card(url), _) if ds.act == Some(Act::RequestChanges) => s.ask_changes(url),
-                (Dragging::Card(url), _) if let Some(act) = ds.act => s.run(act, url),
+                (Dragging::Card(url), _) if ds.act == Some(Act::RequestChanges) => {
+                    s.ask_changes(url);
+                    s.selected.clear();
+                }
+                (Dragging::Card(url), _) if let Some(act) = ds.act => {
+                    let urls: Vec<String> = carried(s, url).into_iter()
+                        .filter(|u| s.prs[s.board()].iter().find(|pr| pr.url == *u).is_some_and(|pr| actions(s, pr).iter().any(|(a, _)| *a == act)))
+                        .collect();
+                    s.selected.clear();
+                    if s.acting.is_none() && !urls.is_empty() {
+                        s.queue = urls[1..].iter().map(|u| (act, u.clone())).collect();
+                        s.run(act, &urls[0]);
+                    }
+                }
                 (Dragging::Card(url), Some(to)) => {
-                    s.lanes_mut().move_card(url, to);
+                    let mut to = to;
+                    for u in carried(s, url) {
+                        let id = s.lanes_mut().move_card(&u, to);
+                        to = Target::Lane(id);
+                    }
+                    s.selected.clear();
                     s.persist();
                 }
                 (Dragging::Lane(id), Some(Target::Lane(onto))) if onto != *id => {

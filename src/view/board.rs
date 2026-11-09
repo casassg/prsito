@@ -5,7 +5,7 @@ use crate::github::{self, Pr};
 use crate::store::{INBOX, Lane, Target};
 use crate::theme::*;
 use crate::App;
-use crate::drag::{drag, Dragging};
+use crate::drag::{drag, marquee, Dragging};
 use super::columns;
 use super::card::{card, card_body};
 
@@ -56,6 +56,7 @@ pub(super) fn board(s: &App, p: Pal) -> El {
     }
     list.scroll(ScrollSpec { stick_bottom: false }).grow(1.0).min_h(0.0)
         .on_layout_tx(|s: &mut App, r, tx| { s.rects.insert("board".into(), r); tx.live_only(); })
+        .on_drag(|s: &mut App, d: &mut Drag, tx: &mut Tx| marquee(s, d, tx))
 }
 
 /// Where a carried card would start a new lane: only while a card hovers a lane's edge or the

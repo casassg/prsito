@@ -58,6 +58,10 @@ pub fn view(s: &App, cx: &mut Cx<App>) -> El {
         }
         root = root.child(ghost(s, d, p));
     }
+    if let Some([x0, y0, x1, y1]) = s.marquee {
+        root = root.child(rune::el().key("marquee").absolute(x0.min(x1), y0.min(y1)).size((x1 - x0).abs(), (y1 - y0).abs())
+            .fill(p.text.alpha(0.08)).border(1.0, p.text.alpha(0.5)).radius(2.0));
+    }
     if s.note.is_some() {
         root = root.child(note(&s.note_text, p));
     }
