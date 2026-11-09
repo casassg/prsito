@@ -1,0 +1,5 @@
+/target
+*.png
+tree.json
+/.hermit
+!/assets/icon.png
