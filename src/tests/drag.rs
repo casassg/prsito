@@ -216,6 +216,17 @@ fn carrying_a_selection_to_a_new_lane_keeps_it_together() {
 }
 
 #[test]
+fn a_selection_across_columns_only_moves_between_lanes() {
+    let mut rt = runtime(github::MINE);
+    cmd_click(&mut rt, "card-acme-fleet-88");
+    cmd_click(&mut rt, "card-acme-fleet-91");
+    assert_eq!(lift(&mut rt, "card-acme-fleet-88", None), Vec::<&str>::new(), "no pills for mixed columns");
+    assert!(!rt.state.rects.keys().any(|k| k.starts_with("act:")));
+    cmd_click(&mut rt, "card-acme-fleet-88");
+    assert_eq!(lift(&mut rt, "card-acme-fleet-88", None), ["draft", "merge"], "a single column keeps them");
+}
+
+#[test]
 fn dragging_an_unselected_card_drops_the_selection() {
     let mut rt = runtime(github::MINE);
     cmd_click(&mut rt, "card-acme-fleet-88");

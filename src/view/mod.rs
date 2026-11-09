@@ -3,7 +3,7 @@ use rune::{Color, Cx, El, Icon, col, icon, row, spacer, text};
 use crate::github;
 use crate::theme::*;
 use crate::App;
-use crate::drag::Dragging;
+use crate::drag::{mixed, Dragging};
 use board::{board, gantry};
 use card::{action_zones, ghost};
 use detail::{detail, note};
@@ -52,7 +52,7 @@ pub fn view(s: &App, cx: &mut Cx<App>) -> El {
     if let Some(d) = &s.drag {
         if let Dragging::Card(url) = &d.what && let Some(pr) = s.prs[s.board()].iter().find(|pr| &pr.url == url) {
             let pills = actions(s, pr);
-            if !pills.is_empty() && let Some(zones) = action_zones(s, pr, d, &pills, p) {
+            if !pills.is_empty() && !mixed(s, url) && let Some(zones) = action_zones(s, pr, d, &pills, p) {
                 root = root.child(zones);
             }
         }

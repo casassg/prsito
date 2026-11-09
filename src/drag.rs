@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use rune::{Drag, Phase, Tx};
 
-use crate::github::Act;
+use crate::github::{self, Act};
 use crate::store::{INBOX, Target};
 use crate::view::menu::{act_name, actions};
 use crate::App;
@@ -79,6 +79,15 @@ pub(crate) fn carries(s: &App, url: &str) -> bool {
     matches!(&s.drag, Some(DragState { what: Dragging::Card(g), .. }) if g == url || s.selected.contains(g) && s.selected.contains(url))
 }
 
+/// Whether the cards carried with `url` sit in more than one column, so only lane moves apply.
+pub(crate) fn mixed(s: &App, url: &str) -> bool {
+    let board = s.board();
+    let mut cols = s.prs[board].iter()
+        .filter(|pr| pr.url == url || s.selected.contains(url) && s.selected.contains(&pr.url))
+        .map(|pr| github::column(board, pr));
+    cols.next().is_some_and(|c| cols.any(|o| o != c))
+}
+
 /// Rubber-band selection on the board's empty space (cards take their own presses). Shift
 /// adds to the selection held at the press; a press that never travels clears it.
 pub(crate) fn marquee(s: &mut App, d: &mut Drag, tx: &mut Tx) {
@@ -144,7 +153,7 @@ pub(crate) fn drag(s: &mut App, what: Dragging, d: &mut Drag, tx: &mut Tx) {
             let [ox, oy, ow, oh] = ds.origin;
             let home = x >= ox && x <= ox + ow && y >= oy && y <= oy + oh;
             let act = match &what {
-                Dragging::Card(url) if !home => act_at(s, url, x, y),
+                Dragging::Card(url) if !home && !mixed(s, url) => act_at(s, url, x, y),
                 _ => None,
             };
             let over = if act.is_some() { None } else { target_at(s, y, card) };
