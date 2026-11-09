@@ -1,12 +1,18 @@
 //! The optional menu bar item: my PRs that need attention or are ready to merge, one click from
 //! the browser. AppKit work stays on the main thread, so the item lives in a thread local.
 
+#[cfg(target_os = "macos")]
 use std::cell::RefCell;
 
+#[cfg(target_os = "macos")]
 use objc2::rc::Retained;
+#[cfg(target_os = "macos")]
 use objc2::runtime::{AnyObject, NSObjectProtocol, Sel};
+#[cfg(target_os = "macos")]
 use objc2::{AnyThread, DefinedClass, MainThreadOnly, define_class, msg_send, sel};
+#[cfg(target_os = "macos")]
 use objc2_app_kit::{NSApplication, NSEventModifierFlags, NSImage, NSMenu, NSMenuItem, NSStatusBar, NSStatusItem, NSWindowStyleMask};
+#[cfg(target_os = "macos")]
 use objc2_foundation::{MainThreadMarker, NSData, NSObject, NSSize, NSString};
 use rune::AppHandle;
 
@@ -47,10 +53,12 @@ pub fn entries(prs: &[Pr]) -> Vec<Entry> {
     }).collect()
 }
 
+#[cfg(target_os = "macos")]
 struct Ivars {
     handle: AppHandle<App>,
 }
 
+#[cfg(target_os = "macos")]
 define_class!(
     #[unsafe(super = NSObject)]
     #[thread_kind = MainThreadOnly]
@@ -84,6 +92,7 @@ define_class!(
     }
 );
 
+#[cfg(target_os = "macos")]
 struct Bar {
     item: Retained<NSStatusItem>,
     menu: Retained<NSMenu>,
@@ -92,12 +101,14 @@ struct Bar {
     built: bool,
 }
 
+#[cfg(target_os = "macos")]
 thread_local! {
     static HANDLE: RefCell<Option<AppHandle<App>>> = const { RefCell::new(None) };
     static BAR: RefCell<Option<Bar>> = const { RefCell::new(None) };
 }
 
 /// Keeps the handle menu actions reach the app through. Call on the main thread before `run`.
+#[cfg(target_os = "macos")]
 pub fn connect(handle: AppHandle<App>) {
     HANDLE.with(|h| *h.borrow_mut() = Some(handle));
 }
@@ -106,6 +117,7 @@ pub fn connect(handle: AppHandle<App>) {
 /// A window closed in full screen was only ordered out, so it keeps AppKit's full screen style
 /// (screen sized, no title bar) and winit still thinks it's full screen: once it shows again,
 /// a real exit brings it back windowed.
+#[cfg(target_os = "macos")]
 pub fn dock(open: bool) {
     let Some(handle) = HANDLE.with(|h| h.borrow().clone()) else { return };
     handle.set_dock_icon(open);
@@ -122,6 +134,7 @@ pub fn dock(open: bool) {
 }
 
 /// Exits a stale full screen once the window shows; false while it's still hidden.
+#[cfg(target_os = "macos")]
 pub fn unfull() -> bool {
     let Some(mtm) = MainThreadMarker::new() else { return true };
     if !HANDLE.with(|h| h.borrow().as_ref().is_some_and(|h| h.is_visible())) {
@@ -137,6 +150,7 @@ pub fn unfull() -> bool {
 }
 
 /// Shows, updates or removes the item. Off the main thread, or before `connect`, it does nothing.
+#[cfg(target_os = "macos")]
 pub fn sync(on: bool, prs: &[Pr]) {
     let Some(mtm) = MainThreadMarker::new() else { return };
     BAR.with(|b| {
@@ -210,3 +224,12 @@ pub fn sync(on: bool, prs: &[Pr]) {
         bar.built = true;
     });
 }
+
+#[cfg(not(target_os = "macos"))]
+pub fn connect(_: AppHandle<App>) {}
+#[cfg(not(target_os = "macos"))]
+pub fn dock(_: bool) {}
+#[cfg(not(target_os = "macos"))]
+pub fn unfull() -> bool { true }
+#[cfg(not(target_os = "macos"))]
+pub fn sync(_: bool, _: &[Pr]) {}

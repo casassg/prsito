@@ -11,9 +11,10 @@ concurrency:
 
 jobs:
   test:
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libxkbcommon-dev libwayland-dev
       - uses: cashapp/activate-hermit@v1
       - uses: actions/cache@v4
         with:
@@ -49,6 +50,8 @@ jobs:
             target
           key: cargo-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
           restore-keys: cargo-${{ runner.os }}-
+      - if: steps.version.outputs.bump
+        run: cargo clippy --all-targets -- -D warnings
       - if: steps.version.outputs.bump
         run: scripts/release.sh "${NEXT#v}"
         env:

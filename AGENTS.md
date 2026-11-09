@@ -8,7 +8,7 @@ A macOS kanban of the user's GitHub PRs, built on Rune (`github.com/anomalyco/ru
 - `cargo test`: unit and headless UI tests, no network. `cargo test live_fetch -- --ignored --nocapture` hits real GitHub with `gh auth token` and takes minutes.
 - `cargo clippy --all-targets`: keep it at zero warnings.
 - `scripts/release.sh [version]`: release build, `.app` bundle (icon from `assets/icon.png`, ad hoc signed), `target/prsito.dmg`, then quits prsito and replaces `/Applications/prsito.app`.
-- CI (`.github/workflows/ci.yml`): clippy and tests on every push and PR. On `main`, `svu next` picks the version from conventional commit prefixes and, if it moved, tags a GitHub release with the dmg (`CI` set skips the install).
+- CI (`.github/workflows/ci.yml`): clippy and tests on Linux for every push and PR (AppKit code in `statusbar.rs` is `cfg(target_os = "macos")` with no-op stubs elsewhere). On `main`, macOS clippy runs, then `svu next` picks the version from conventional commit prefixes and, if it moved, tags a GitHub release with the dmg (`CI` set skips the install).
 - When a change is finished (tests and clippy green), run `scripts/release.sh` without asking so the installed app picks it up. Skip it for doc-only or test-only changes.
 
 ## Headless checks (Rune tooling, no window)

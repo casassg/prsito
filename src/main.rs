@@ -8,6 +8,7 @@ mod github;
 mod statusbar;
 mod store;
 mod theme;
+mod update;
 mod view;
 
 use std::collections::{HashMap, HashSet};
