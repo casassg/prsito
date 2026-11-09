@@ -22,6 +22,7 @@ use crate::github::{self, Ci, Pr, Review};
 /// A PR row of the menu: `ready` to merge, or needing attention. `detail` says where and why,
 /// `symbol` is the SF Symbol beside it.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub struct Entry {
     pub ready: bool,
     pub title: String,
@@ -32,6 +33,7 @@ pub struct Entry {
 
 /// My open PRs with failing CI or changes requested, then those approved with CI green, each
 /// group newest first.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub fn entries(prs: &[Pr]) -> Vec<Entry> {
     let mut found: Vec<&Pr> = prs.iter().filter(|p| match github::column(github::MINE, p) {
         2 => true,
