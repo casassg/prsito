@@ -82,3 +82,17 @@ fn the_menu_bar_lists_my_prs_needing_attention_then_ready_to_merge() {
     s.toggle_menu_bar();
     assert!(s.saved.settings.menu_bar);
 }
+
+#[test]
+fn settings_check_now_reports_up_to_date_and_offers_a_found_release() {
+    let mut rt = runtime(github::MINE);
+    rt.state.settings_open = true;
+    settle(&mut rt);
+    assert!(rt.state.update_status.is_none());
+    click(&mut rt, "check-update");
+    assert_eq!(rt.state.update_status.as_deref(), Some("Up to date"), "headless finds nothing at once");
+    rt.state.update = Some(crate::update::Release { version: "9.9.9".into(), url: String::new() });
+    settle(&mut rt);
+    click(&mut rt, "check-update");
+    assert!(rt.state.updating, "with a release found the button installs it");
+}

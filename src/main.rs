@@ -34,7 +34,7 @@ pub struct Fetched {
 pub enum Note {
     Detail { url: String, result: Result<github::Info, String> },
     Acted { url: String, act: Act, result: Result<(), String> },
-    Update(Option<update::Release>),
+    Update(Result<Option<update::Release>, String>),
     UpdateFailed(String),
 }
 
@@ -114,6 +114,9 @@ pub struct App {
     pub update: Option<update::Release>,
     pub updating: bool,
     pub next_check: f64,
+    pub checking: bool,
+    /// What the last update check found, shown in settings.
+    pub update_status: Option<String>,
 }
 
 impl App {
@@ -163,6 +166,8 @@ impl App {
             update: None,
             updating: false,
             next_check: 0.0,
+            checking: false,
+            update_status: None,
         }
     }
 
@@ -182,12 +187,20 @@ impl App {
         });
     }
 
-    fn check_update(&self) {
+    /// Asks GitHub for a newer release, one check at a time. Headless it finds none at once.
+    pub fn check_update(&mut self) {
+        if self.checking {
+            return;
+        }
+        if !self.live {
+            self.update_status = Some("Up to date".into());
+            return;
+        }
         let Some(current) = update::VERSION else { return };
+        self.checking = true;
         let (out, wake) = (self.notes_out.clone(), self.waker.clone());
         std::thread::spawn(move || {
-            let Ok(found) = update::check(current) else { return };
-            if out.send(Note::Update(found)).is_ok() && let Some(w) = &wake {
+            if out.send(Note::Update(update::check(current))).is_ok() && let Some(w) = &wake {
                 w();
             }
         });
@@ -560,7 +573,19 @@ fn poll(s: &mut App, t: f64, tx: &mut Tx) -> bool {
                 }
             }
             Note::Acted { url, act, result } => s.finish(&url, act, result),
-            Note::Update(found) => s.update = found,
+            Note::Update(result) => {
+                s.checking = false;
+                match result {
+                    Ok(found) => {
+                        s.update_status = Some(match &found {
+                            Some(r) => format!("{} is available", r.version),
+                            None => "Up to date".into(),
+                        });
+                        s.update = found;
+                    }
+                    Err(e) => s.update_status = Some(e),
+                }
+            }
             Note::UpdateFailed(e) => {
                 s.updating = false;
                 s.error[s.board()] = Some(e);
