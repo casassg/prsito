@@ -25,19 +25,6 @@ mod toolbar;
 pub fn view(s: &App, cx: &mut Cx<App>) -> El {
     let dark = cx.system_dark();
     let p = pal(&s.saved.settings.theme, dark, cx.accent());
-    let mut stage = col().key("stage").grow(1.0).min_w(0.0).h_full().child(toolbar(s, p));
-    if let Some(r) = &s.update {
-        let button = |key: &str, label: &str, on: bool| row().key(key).h(24.0).px(10.0).center().radius(6.0).role("button")
-            .label(label.to_string()).disabled(!on).fill(p.band).hover(p.line)
-            .child(text(label.to_string()).font(STAGE).color(if on { p.text } else { p.muted }));
-        stage = stage.child(row().key("update").mx(20.0).mb(8.0).px(12.0).py(6.0).gap(10.0).center_y().radius(8.0)
-            .fill(p.go.alpha(0.12)).border(1.0, p.go.alpha(0.35))
-            .child(text(format!("prsito {} is available", r.version)).font(STAGE).color(p.text))
-            .child(spacer())
-            .child(button("install", if s.updating { "Updating…" } else { "Update and relaunch" }, !s.updating)
-                .on_press(|s: &mut App| s.install_update()))
-            .child(button("dismiss", "Later", !s.updating).on_press(|s: &mut App| if !s.updating { s.update = None })));
-    }
     let mut root = row().key("root").w_full().h_full().fill(p.ink)
         .on_layout_tx(move |s: &mut App, r, tx| {
             s.rects.insert("root".into(), r);
@@ -48,7 +35,24 @@ pub fn view(s: &App, cx: &mut Cx<App>) -> El {
             tx.live_only();
         })
         .child(rail(s, p, cx.titlebar_inset() > 0.0))
-        .child(stage.child(gantry(s, p)).child(board(s, p)));
+        .child(col().key("stage").grow(1.0).min_w(0.0).h_full()
+            .child(toolbar(s, p))
+            .child(gantry(s, p))
+            .child(board(s, p)));
+    if let Some(r) = &s.update {
+        let button = |key: &str, label: &str, on: bool, fill: Color| row().key(key).h(26.0).px(10.0).center().radius(7.0).role("button")
+            .label(label.to_string()).disabled(!on).fill(fill).hover(fill.mix(p.text, 0.12))
+            .child(text(label.to_string()).font(STAGE).color(if on { p.text } else { p.muted }));
+        let current = crate::update::VERSION.map(|v| format!("You have {v}")).unwrap_or_else(|| "A new release is out".into());
+        root = root.child(glass(col().key("update").pin(None, None, Some(16.0), Some(16.0)).w(280.0).padding(14.0).gap(10.0).radius(12.0), p)
+            .child(col().gap(2.0)
+                .child(text(format!("prsito {} is available", r.version)).font(LANE).color(p.text))
+                .child(text(current).font(SMALL).color(p.muted)))
+            .child(row().key("actions").gap(8.0).child(spacer())
+                .child(button("dismiss", "Later", !s.updating, p.band).on_press(|s: &mut App| if !s.updating { s.update = None }))
+                .child(button("install", if s.updating { "Updating…" } else { "Update and relaunch" }, !s.updating, p.go.alpha(0.35))
+                    .on_press(|s: &mut App| s.install_update()))));
+    }
     if let Some(d) = &s.drag {
         if let Dragging::Card(url) = &d.what && let Some(pr) = s.prs[s.board()].iter().find(|pr| &pr.url == url) {
             let pills = actions(s, pr);

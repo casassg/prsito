@@ -143,7 +143,7 @@ fn the_update_banner_shows_only_with_a_release_and_later_hides_it() {
     rt.state.update = Some(crate::update::Release { version: "9.9.9".into(), url: String::new() });
     settle(&mut rt);
     assert!(rt.find("update").is_some());
-    click(&mut rt, "update/dismiss");
+    click(&mut rt, "update/actions/dismiss");
     assert!(rt.state.update.is_none());
     assert!(rt.find("update").is_none());
 }
@@ -155,8 +155,8 @@ fn update_installs_once_and_waits_while_running() {
     assert!(!rt.state.updating, "nothing to install without a release");
     rt.state.update = Some(crate::update::Release { version: "9.9.9".into(), url: String::new() });
     settle(&mut rt);
-    click(&mut rt, "update/install");
+    click(&mut rt, "update/actions/install");
     assert!(rt.state.updating);
-    click(&mut rt, "update/dismiss");
+    click(&mut rt, "update/actions/dismiss");
     assert!(rt.state.update.is_some(), "Later is disabled mid-install");
 }
