@@ -254,9 +254,9 @@ fn token(fresh: bool) -> Result<String, String> {
         return Ok(t.clone());
     }
     // An app opened from Finder gets a bare PATH, without Homebrew's.
-    let out = ["gh", "/opt/homebrew/bin/gh", "/usr/local/bin/gh"].iter()
+    let out = ["gh", "/opt/homebrew/bin/gh", "/usr/local/bin/gh", "/usr/bin/gh", r"C:\Program Files\GitHub CLI\gh.exe"].iter()
         .find_map(|gh| std::process::Command::new(gh).args(["auth", "token"]).output().ok())
-        .ok_or("can't find gh, install it (brew install gh) and run `gh auth login`")?;
+        .ok_or("can't find gh, install it (https://cli.github.com) and run `gh auth login`")?;
     let t = String::from_utf8_lossy(&out.stdout).trim().to_string();
     if !out.status.success() || t.is_empty() {
         return Err("no GitHub token, run `gh auth login`".into());

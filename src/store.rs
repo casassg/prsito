@@ -142,8 +142,11 @@ pub struct Saved {
 }
 
 pub fn path() -> Option<PathBuf> {
-    let home = std::env::var_os("HOME")?;
-    Some(PathBuf::from(home).join(".config/prsito/prsito.db"))
+    let dir = match std::env::var_os(if cfg!(windows) { "APPDATA" } else { "XDG_CONFIG_HOME" }) {
+        Some(d) if !d.is_empty() && !cfg!(target_os = "macos") => PathBuf::from(d),
+        _ => PathBuf::from(std::env::var_os("HOME")?).join(".config"),
+    };
+    Some(dir.join("prsito/prsito.db"))
 }
 
 const SCHEMA: &str = "

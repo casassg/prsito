@@ -697,7 +697,7 @@ fn main() {
             }),
             ("update", |s| {
                 fixture(s, github::MINE);
-                s.update = Some(update::Release { version: "0.4.0".into(), dmg: String::new() });
+                s.update = Some(update::Release { version: "0.4.0".into(), url: String::new() });
             }),
             ("black", |s| {
                 fixture(s, github::MINE);
