@@ -50,6 +50,11 @@ ln -s /Applications "$out/stage/Applications"
 rm -f target/prsito.dmg
 hdiutil create -volname "prsito" -srcfolder "$out/stage" -ov -format UDZO target/prsito.dmg 2>&1 >/dev/null | { grep -v deprecated || true; } >&2
 
+if [ -n "${CI:-}" ]; then
+  rm -rf "$out"
+  echo "target/prsito.dmg ($(du -h target/prsito.dmg | cut -f1))"
+  exit 0
+fi
 osascript -e 'quit app "prsito"' >/dev/null 2>&1 || true
 rm -rf /Applications/prsito.app
 cp -R "$app" /Applications/prsito.app

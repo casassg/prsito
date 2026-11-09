@@ -1,0 +1,60 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cashapp/activate-hermit@v1
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .hermit/rust
+            target
+          key: cargo-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
+
+  release:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: cashapp/activate-hermit@v1
+      - id: version
+        run: |
+          next=$(svu next)
+          echo "next=$next" >> "$GITHUB_OUTPUT"
+          [ "$next" != "$(svu current)" ] && echo "bump=true" >> "$GITHUB_OUTPUT" || true
+      - if: steps.version.outputs.bump
+        uses: actions/cache@v4
+        with:
+          path: |
+            .hermit/rust
+            target
+          key: cargo-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+      - if: steps.version.outputs.bump
+        run: scripts/release.sh "${NEXT#v}"
+        env:
+          NEXT: ${{ steps.version.outputs.next }}
+      - if: steps.version.outputs.bump
+        run: gh release create "$NEXT" target/prsito.dmg --target "$GITHUB_SHA" --generate-notes
+        env:
+          NEXT: ${{ steps.version.outputs.next }}
+          GH_TOKEN: ${{ github.token }}
