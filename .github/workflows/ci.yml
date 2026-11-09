@@ -26,12 +26,9 @@ jobs:
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
 
-  release:
-    needs: test
+  version:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: macos-latest
-    permissions:
-      contents: write
+    runs-on: ubuntu-latest
     outputs:
       next: ${{ steps.version.outputs.next }}
       bump: ${{ steps.version.outputs.bump }}
@@ -45,50 +42,27 @@ jobs:
           next=$(svu next)
           echo "next=$next" >> "$GITHUB_OUTPUT"
           [ "$next" != "$(svu current)" ] && echo "bump=true" >> "$GITHUB_OUTPUT" || true
-      - if: steps.version.outputs.bump
-        uses: actions/cache@v4
-        with:
-          path: |
-            .hermit/rust
-            target
-          key: cargo-release-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
-          restore-keys: cargo-release-${{ runner.os }}-
-      - if: steps.version.outputs.bump
-        run: cargo clippy --all-targets -- -D warnings
-      - if: steps.version.outputs.bump
-        run: scripts/release.sh "${NEXT#v}"
-        env:
-          NEXT: ${{ steps.version.outputs.next }}
-      - if: steps.version.outputs.bump
-        run: |
-          git tag "$NEXT" "$GITHUB_SHA"
-          git push origin "refs/tags/$NEXT"
-          gh release create "$NEXT" target/prsito.dmg --generate-notes
-        env:
-          NEXT: ${{ steps.version.outputs.next }}
-          GH_TOKEN: ${{ github.token }}
 
-  binaries:
-    needs: release
-    if: needs.release.outputs.bump
+  build:
+    needs: version
+    if: needs.version.outputs.bump
     strategy:
       matrix:
         include:
+          - os: macos-latest
+            asset: prsito.dmg
           - os: ubuntu-latest
             asset: prsito-linux-x86_64.tar.gz
           - os: windows-latest
             asset: prsito-windows-x86_64.zip
     runs-on: ${{ matrix.os }}
-    permissions:
-      contents: write
     env:
-      NEXT: ${{ needs.release.outputs.next }}
-      GH_TOKEN: ${{ github.token }}
+      NEXT: ${{ needs.version.outputs.next }}
     steps:
       - uses: actions/checkout@v4
       - if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libxkbcommon-dev libwayland-dev
-      - if: runner.os == 'Linux'
+      - if: runner.os != 'Windows'
         uses: cashapp/activate-hermit@v1
       - uses: actions/cache@v4
         with:
@@ -97,11 +71,37 @@ jobs:
             target
           key: cargo-release-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
           restore-keys: cargo-release-${{ runner.os }}-
-      - shell: bash
+      - if: runner.os == 'macOS'
+        run: |
+          cargo clippy --all-targets -- -D warnings
+          scripts/release.sh "${NEXT#v}"
+      - if: runner.os != 'macOS'
+        shell: bash
         run: |
           export PRSITO_VERSION="${NEXT#v}"
           cargo build --release
           cd target/release
           if [ "$RUNNER_OS" = Windows ]; then 7z a "../${{ matrix.asset }}" prsito.exe; else tar -czf "../${{ matrix.asset }}" prsito; fi
-      - shell: bash
-        run: gh release upload "$NEXT" "target/${{ matrix.asset }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: target/${{ matrix.asset }}
+
+  publish:
+    needs: [test, version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      NEXT: ${{ needs.version.outputs.next }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - run: |
+          git tag "$NEXT" "$GITHUB_SHA"
+          git push origin "refs/tags/$NEXT"
+          gh release create "$NEXT" dist/* --generate-notes
