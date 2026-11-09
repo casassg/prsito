@@ -51,8 +51,8 @@ jobs:
           path: |
             .hermit/rust
             target
-          key: cargo-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
-          restore-keys: cargo-${{ runner.os }}-
+          key: cargo-release-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+          restore-keys: cargo-release-${{ runner.os }}-
       - if: steps.version.outputs.bump
         run: cargo clippy --all-targets -- -D warnings
       - if: steps.version.outputs.bump
@@ -60,7 +60,10 @@ jobs:
         env:
           NEXT: ${{ steps.version.outputs.next }}
       - if: steps.version.outputs.bump
-        run: gh release create "$NEXT" target/prsito.dmg --target "$GITHUB_SHA" --generate-notes
+        run: |
+          git tag "$NEXT" "$GITHUB_SHA"
+          git push origin "refs/tags/$NEXT"
+          gh release create "$NEXT" target/prsito.dmg --generate-notes
         env:
           NEXT: ${{ steps.version.outputs.next }}
           GH_TOKEN: ${{ github.token }}
