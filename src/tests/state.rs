@@ -81,3 +81,11 @@ fn only_a_higher_release_counts_as_newer() {
     assert!(!newer("nightly", "0.3.0"));
     assert!(!newer("0.4.0", ""));
 }
+
+#[test]
+#[ignore]
+fn live_update_check_reads_the_latest_tag() {
+    let r = crate::update::check("0.0.0").unwrap().expect("any release is newer than 0.0.0");
+    assert!(r.url.starts_with("https://github.com/casassg/prsito/releases/download/v"), "{}", r.url);
+    assert_eq!(crate::update::check("999.0.0").unwrap(), None);
+}

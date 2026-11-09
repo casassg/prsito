@@ -22,26 +22,26 @@ pub struct Release {
     pub url: String,
 }
 
-/// The latest release when it's newer than `current` and has a build for this platform.
+/// The latest release when it's newer than `current`. Reads the tag from the redirect of
+/// github.com's releases/latest page rather than the API, whose unauthenticated limit (60 an
+/// hour per IP) runs out behind shared office or VPN addresses.
 pub fn check(current: &str) -> Result<Option<Release>, String> {
     if let Some(old) = old_exe() {
         let _ = std::fs::remove_file(old);
     }
-    let text = ureq::get("https://api.github.com/repos/casassg/prsito/releases/latest")
-        .header("Accept", "application/vnd.github+json")
+    let res = ureq::get("https://github.com/casassg/prsito/releases/latest")
+        .config().max_redirects(0).build()
         .header("User-Agent", "prsito")
         .call()
-        .and_then(|mut r| r.body_mut().read_to_string())
         .map_err(|e| format!("can't check for updates: {e}"))?;
-    let body: serde_json::Value = serde_json::from_str(&text).map_err(|e| format!("can't check for updates: {e}"))?;
-    let version = body["tag_name"].as_str().unwrap_or_default().trim_start_matches('v').to_string();
-    let url = body["assets"].as_array().into_iter().flatten()
-        .find(|a| a["name"] == ASSET)
-        .and_then(|a| a["browser_download_url"].as_str());
-    Ok(match url {
-        Some(url) if newer(&version, current) => Some(Release { version, url: url.to_string() }),
-        _ => None,
-    })
+    let tag = res.headers().get("location").and_then(|l| l.to_str().ok())
+        .and_then(|l| l.rsplit_once("/tag/")).map(|(_, t)| t.to_string())
+        .ok_or("can't check for updates: no release")?;
+    let version = tag.trim_start_matches('v').to_string();
+    Ok(newer(&version, current).then(|| Release {
+        url: format!("https://github.com/casassg/prsito/releases/download/{tag}/{ASSET}"),
+        version,
+    }))
 }
 
 /// `a > b` as dotted numbers; anything that doesn't parse is never newer.

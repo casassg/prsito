@@ -56,4 +56,40 @@ pub(super) fn settings(s: &App, p: Pal) -> El {
                 .fill(p.ink).border(1.0, p.line).hover(p.band)
                 .child(text(if s.cli { "Installed" } else { "Install" }).font(STAGE).color(if s.cli { p.muted } else { p.text }))
                 .on_press(|s: &mut App| s.install_cli())))
+        .child(version(s, p))
+}
+
+/// The running version and what the last update check found; local builds don't check.
+fn version(s: &App, p: Pal) -> El {
+    let checks = crate::update::VERSION.is_some() || !s.live;
+    let name = match crate::update::VERSION {
+        Some(v) => format!("prsito {v}"),
+        None => "prsito (local build)".into(),
+    };
+    let status = match (&s.update_status, checks) {
+        (_, false) => "Release builds check for updates".to_string(),
+        (Some(st), true) => st.clone(),
+        (None, true) => "Checks for updates every 6 hours".into(),
+    };
+    let mut line = row().key("version").w_full().gap(8.0).center_y().pt(6.0)
+        .child(col().gap(2.0)
+            .child(text(name).font(STAGE).color(p.text))
+            .child(text(status).font(SMALL).color(p.muted).truncate().max_w(200.0)))
+        .child(spacer());
+    if checks {
+        let (label, on) = match (&s.update, s.checking || s.updating) {
+            (_, true) if s.updating => ("Updating…", false),
+            (_, true) => ("Checking…", false),
+            (Some(_), false) => ("Update", true),
+            (None, false) => ("Check now", true),
+        };
+        line = line.child(row().key("check-update").h(26.0).px(10.0).center().radius(7.0).role("button")
+            .label(label).fill(p.ink).border(1.0, p.line).hover(p.band)
+            .child(text(label).font(STAGE).color(if on { p.text } else { p.muted }))
+            .on_press(|s: &mut App| match s.update {
+                Some(_) => s.install_update(),
+                None => s.check_update(),
+            }));
+    }
+    line
 }
