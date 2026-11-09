@@ -3,7 +3,7 @@ use rune::{Color, Drag, El, Transition, Tx, col, el, icon, row, text};
 use crate::github::{self, Act, Ci, Pr, Review};
 use crate::theme::*;
 use crate::App;
-use crate::drag::{drag, DragState, Dragging};
+use crate::drag::{carries, drag, DragState, Dragging};
 use super::columns;
 use super::icons::{X, act_icon};
 use super::menu::act_name;
@@ -14,10 +14,16 @@ fn card_key(pr: &Pr) -> String {
 
 pub(super) fn card(s: &App, pr: &Pr, p: Pal) -> El {
     let url = pr.url.clone();
-    let lifted = s.drag.as_ref().is_some_and(|d| d.what == Dragging::Card(pr.url.clone()));
+    let lifted = carries(s, &pr.url);
+    let selected = s.selected.contains(&pr.url);
     let rect_key = format!("card:{}", pr.url);
     let menu_url = pr.url.clone();
-    card_body(s, pr, p).key(card_key(pr))
+    let body = card_body(s, pr, p).key(card_key(pr));
+    if selected {
+        body.border(1.5, p.text.alpha(0.85))
+    } else {
+        body
+    }
         .on_secondary_press(move |s: &mut App, at, tx: &mut Tx| { tx.instant(); s.open_menu(menu_url.clone(), at.x, at.y) })
         .hover(p.card_hover)
         .hover_group()
@@ -109,8 +115,25 @@ pub(super) fn ghost(s: &App, d: &DragState, p: Pal) -> El {
                 .child(text(name).font(LANE).color(p.text))
         }
     };
-    body.key("ghost").absolute(x + d.dx, y + d.dy).w(w).rotate(-0.025)
-        .shadow(14.0, 32.0, Color::BLACK.alpha(0.55)).opacity(0.96)
+    let n = match &d.what {
+        Dragging::Card(url) if s.selected.contains(url) => s.selected.len(),
+        _ => 1,
+    };
+    let mut ghost = el().key("ghost").absolute(x + d.dx, y + d.dy).w(w);
+    if let Dragging::Card(url) = &d.what && n > 1 {
+        let behind = s.prs[s.board()].iter().filter(|pr| s.selected.contains(&pr.url) && &pr.url != url).take(2);
+        for (i, pr) in behind.enumerate().collect::<Vec<_>>().into_iter().rev() {
+            let k = (i + 1) as f32;
+            ghost = ghost.child(card_body(s, pr, p).fill(p.card_hover).absolute(6.0 * k, 6.0 * k).w(w).rotate(0.02 * k).opacity(0.85));
+        }
+    }
+    let ghost = ghost.child(body.rotate(-0.025).shadow(14.0, 32.0, Color::BLACK.alpha(0.55)).opacity(0.96));
+    if n > 1 {
+        ghost.child(row().key("count").absolute(w - 12.0, -10.0).size(22.0, 22.0).center().radius(11.0).fill(p.text)
+            .child(text(n.to_string()).font(SMALL).color(p.ink)))
+    } else {
+        ghost
+    }
 }
 
 /// The drop zones while a card is carried: faded slabs over the card's own lane, snapped to the

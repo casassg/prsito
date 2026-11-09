@@ -238,7 +238,10 @@ pub fn install(home: &Path, exe: &Path) -> Result<(), String> {
     if let Some(dir) = link.parent() {
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }
-    std::os::unix::fs::symlink(exe, &link).map_err(|e| format!("can't link {}: {e}", link.display()))
+    #[cfg(unix)]
+    return std::os::unix::fs::symlink(exe, &link).map_err(|e| format!("can't link {}: {e}", link.display()));
+    #[cfg(not(unix))]
+    Err(format!("can't link on Windows, add {} to PATH instead", exe.parent().unwrap_or(exe).display()))
 }
 
 pub fn installed(home: &Path, exe: &Path) -> bool {

@@ -141,3 +141,110 @@ fn requesting_changes_asks_for_a_comment_first() {
     assert_eq!((pr.my_review.as_deref(), pr.requested), (Some("CHANGES_REQUESTED"), false));
     assert!(rt.state.note.is_none());
 }
+
+fn urls(ids: &[&str]) -> std::collections::HashSet<String> {
+    ids.iter().map(|p| format!("https://github.com/{p}")).collect()
+}
+
+fn cmd_click(rt: &mut Runtime<App>, key: &str) {
+    let cmd = rune::Mods { cmd: true, ..Default::default() };
+    rt.physical_input(rune::PhysicalInput::Modifiers(cmd));
+    click(rt, key);
+    rt.physical_input(rune::PhysicalInput::Modifiers(rune::Mods::default()));
+}
+
+#[test]
+fn a_marquee_over_empty_space_selects_the_cards_it_touches() {
+    let mut rt = runtime(github::MINE);
+    let [cx, cy, cw, ch] = rt.state.rects[&format!("card:{FLEET88}")];
+    let [bx, by, bw, _] = rt.state.rects["board"];
+    let (sx, sy) = (bx + bw - 6.0, by + 2.0);
+    rt.pointer_down(sx, sy);
+    for i in 1..=8 {
+        let k = i as f32 / 8.0;
+        rt.pointer_move(sx + (cx + cw / 2.0 - sx) * k, sy + (cy + ch / 2.0 - sy) * k);
+        rt.frame(1.0 / 60.0);
+    }
+    assert!(rt.find("marquee").is_some());
+    assert!(rt.state.selected.contains(FLEET88), "{:?}", rt.state.selected);
+    assert!(!rt.state.selected.contains(PSY));
+    rt.pointer_up(cx + cw / 2.0, cy + ch / 2.0);
+    settle(&mut rt);
+    assert!(rt.state.marquee.is_none() && rt.find("marquee").is_none(), "{:?}", rt.state.marquee);
+    assert!(!rt.state.selected.is_empty());
+    let (x, y) = (bx + bw - 6.0, by + 2.0);
+    rt.pointer_down(x, y);
+    rt.pointer_up(x, y);
+    rt.frame(1.0 / 60.0);
+    assert!(rt.state.selected.is_empty(), "a background click clears");
+}
+
+#[test]
+fn cmd_click_toggles_selection_and_plain_click_opens() {
+    let mut rt = runtime(github::MINE);
+    cmd_click(&mut rt, "card-acme-fleet-88");
+    cmd_click(&mut rt, "card-casassg-psy-77");
+    assert_eq!(rt.state.selected, urls(&["acme/fleet/pull/88", "casassg/psy/pull/77"]));
+    assert!(rt.state.detail.is_none());
+    cmd_click(&mut rt, "card-casassg-psy-77");
+    assert_eq!(rt.state.selected, urls(&["acme/fleet/pull/88"]));
+    click(&mut rt, "card-acme-fleet-91");
+    assert!(rt.state.selected.is_empty() && rt.state.detail.is_some());
+}
+
+#[test]
+fn dragging_a_selected_card_carries_the_selection() {
+    let mut rt = runtime(github::MINE);
+    cmd_click(&mut rt, "card-acme-fleet-88");
+    cmd_click(&mut rt, "card-acme-fleet-91");
+    drag(&mut rt, "card-acme-fleet-88", "lane-2");
+    let l = rt.state.lanes();
+    assert_eq!((l.lane_of(FLEET88), l.lane_of("https://github.com/acme/fleet/pull/91")), (2, 2));
+    assert!(rt.state.selected.is_empty());
+}
+
+#[test]
+fn carrying_a_selection_to_a_new_lane_keeps_it_together() {
+    let mut rt = runtime(github::MINE);
+    cmd_click(&mut rt, "card-acme-fleet-88");
+    cmd_click(&mut rt, "card-casassg-psy-77");
+    let [x, y, w, _] = rt.state.rects["lane:2"];
+    drag_to(&mut rt, "card-acme-fleet-88", x + w / 2.0, y - 4.0);
+    let l = rt.state.lanes();
+    assert_ne!(l.lane_of(FLEET88), 2);
+    assert_eq!(l.lane_of(FLEET88), l.lane_of(PSY));
+}
+
+#[test]
+fn dragging_an_unselected_card_drops_the_selection() {
+    let mut rt = runtime(github::MINE);
+    cmd_click(&mut rt, "card-acme-fleet-88");
+    drag(&mut rt, "card-acme-fleet-91", "lane-2");
+    let l = rt.state.lanes();
+    assert_eq!(l.lane_of("https://github.com/acme/fleet/pull/91"), 2);
+    assert_eq!(l.lane_of(FLEET88), 1);
+    assert!(rt.state.selected.is_empty());
+}
+
+#[test]
+fn a_cancelled_multi_drag_changes_nothing() {
+    let mut rt = runtime(github::MINE);
+    cmd_click(&mut rt, "card-acme-fleet-88");
+    cmd_click(&mut rt, "card-acme-fleet-91");
+    let before = rt.state.saved.clone();
+    let (x, y) = rt.find("card-acme-fleet-88").unwrap();
+    rt.pointer_down(x, y);
+    let (tx, ty) = rt.find("lane-2").unwrap();
+    for i in 1..=8 {
+        let k = i as f32 / 8.0;
+        rt.pointer_move(x + (tx - x) * k, y + (ty - y) * k);
+        rt.frame(1.0 / 60.0);
+    }
+    assert!(rt.state.drag.is_some());
+    rt.key(rune::KeyEvent { key: rune::Key::Escape, mods: rune::Mods::default() });
+    rt.pointer_up(tx, ty);
+    for _ in 0..5 {
+        rt.frame(1.0 / 60.0);
+    }
+    assert_eq!(rt.state.saved, before);
+}

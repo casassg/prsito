@@ -79,6 +79,14 @@ pub struct App {
     pub full: bool,
     pub now: i64,
     pub drag: Option<DragState>,
+    /// URLs of the selected cards; a drag of one carries them all.
+    pub selected: HashSet<String>,
+    /// The rubber band while it's dragged: press and current point, in window points.
+    pub marquee: Option<[f32; 4]>,
+    /// The selection when a marquee press began, kept when shift is held.
+    pub marquee_base: HashSet<String>,
+    /// Acts waiting for the one in flight, from a multi-card drop on an action pill.
+    pub queue: Vec<(Act, String)>,
     /// Window rects of cards (`card:URL`), lanes (`lane:ID`) and the new-lane zone (`new`).
     pub rects: HashMap<String, [f32; 4]>,
     pub renaming: Option<u64>,
@@ -139,6 +147,10 @@ impl App {
             full: false,
             now: github::now(),
             drag: None,
+            selected: HashSet::new(),
+            marquee: None,
+            marquee_base: HashSet::new(),
+            queue: Vec::new(),
             rects: HashMap::new(),
             renaming: None,
             rename: TextEdit::new(""),
@@ -295,6 +307,7 @@ impl App {
         self.acting = None;
         if let Err(e) = result {
             self.error[self.board()] = Some(e);
+            self.queue.clear();
             return;
         }
         let now = github::now();
@@ -306,6 +319,10 @@ impl App {
         }
         self.now = now;
         self.next_fetch = 0.0;
+        if !self.queue.is_empty() {
+            let (act, url) = self.queue.remove(0);
+            self.run(act, &url);
+        }
     }
 
     pub fn lanes(&self) -> &store::Lanes {
@@ -645,6 +662,10 @@ fn on_key(s: &mut App, ev: &KeyEvent, tx: &mut Tx) -> bool {
         s.close_settings();
         return true;
     }
+    if ev.key == Key::Escape && !s.selected.is_empty() {
+        s.selected.clear();
+        return true;
+    }
     false
 }
 
@@ -690,6 +711,17 @@ fn main() {
                 fixture(s, github::REVIEWS);
                 let url = "https://github.com/acme/fleet/pull/5501".to_string();
                 s.drag = Some(DragState { what: Dragging::Card(url), origin: [700.0, 140.0, 240.0, 90.0], dx: 0.0, dy: 120.0, over: None, act: Some(Act::Approve) });
+            }),
+            ("select", |s| {
+                fixture(s, github::MINE);
+                s.selected = ["acme/fleet/pull/88", "acme/pipelines/pull/1210", "casassg/psy/pull/77"].map(|p| format!("https://github.com/{p}")).into();
+                s.marquee = Some([300.0, 150.0, 640.0, 330.0]);
+            }),
+            ("multi", |s| {
+                fixture(s, github::MINE);
+                s.selected = ["acme/fleet/pull/88", "acme/fleet/pull/91", "acme/pipelines/pull/1210"].map(|p| format!("https://github.com/{p}")).into();
+                let url = "https://github.com/acme/fleet/pull/88".to_string();
+                s.drag = Some(DragState { what: Dragging::Card(url), origin: [300.0, 150.0, 240.0, 90.0], dx: 140.0, dy: 200.0, over: None, act: None });
             }),
             ("note", |s| {
                 fixture(s, github::REVIEWS);
